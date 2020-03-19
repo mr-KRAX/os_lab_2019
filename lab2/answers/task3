@@ -1,0 +1,45 @@
+#! /bin/bash
+
+function smart_exit() {
+    if [[ $1 -ne 0 ]]; then
+    shift
+    echo $*
+    fi   
+}
+
+# exit when any command fails
+set -e
+# keep track of the last executed command
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+# echo an error message before exiting
+# trap 'echo "\"${last_command}\" command filed with exit code $?."' EXIT
+trap 'smart_exit $? "\"${last_command}\" command filed with exit code $?."' EXIT
+# nice_echo include
+. /home/alexandr/Documents/scripts/nice_echo
+
+lm_echo "task3"
+cd /home/alexandr/GitRepos/os_lab_2019/lab2/src/revert_string
+lb_echo "---PWD: $(pwd)"
+lg_echo "---Create the object files"
+gcc -c ./main.c -o ./bin/main.o
+gcc -c ./revert_string.c -o ./bin/static/revert_string.o
+gcc -c -fPIC ./revert_string.c -o ./bin/shared/revert_string.o
+
+lg_echo "---Create static library"
+ar rcs ./bin/static/librevstr.a bin/static/revert_string.o
+
+lg_echo "---Link statically"
+gcc   bin/main.o  -Lbin/static -lrevstr -o ./statically-linked-revers_string
+lb_echo "---TEST statically-linked-revers_string qwerty"
+./statically-linked-revers_string qwerty
+
+
+lg_echo "---Create the shared library"
+gcc -shared bin/shared/revert_string.o -o bin/shared/librevstr.so
+
+lg_echo "---Link dynamically with the shared library"
+gcc bin/main.o  -Lbin/shared -lrevstr -o ./use-shared-library-revers_string
+lb_echo "---TEST use-shared-library-revers_string qwerty"
+./statically-linked-revers_string qwerty
+
+lm_echo "Done"

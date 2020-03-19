@@ -1,0 +1,4 @@
+#! /bin/bash
+
+cd /home/alexandr/GitRepos/os_lab_2019/lab2/src/revert_string
+gcc main.c revert_string.c -o Revert_string

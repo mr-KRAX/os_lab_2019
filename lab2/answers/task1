@@ -1,0 +1,4 @@
+#! /bin/bash
+
+cd /home/alexandr/GitRepos/os_lab_2019/lab2/src/swap
+gcc swap.c main.c -o Swap

@@ -40,18 +40,12 @@ int main(int argc, char **argv) {
         switch (option_index) {
           case 0:
             seed = atoi(optarg);
-            // your code here
-            // error handling
             break;
           case 1:
             array_size = atoi(optarg);
-            // your code here
-            // error handling
             break;
           case 2:
             pnum = atoi(optarg);
-            // your code here
-            // error handling
             break;
           case 3:
             with_files = true;
@@ -78,7 +72,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (seed == -1 || array_size == -1 || pnum == -1) {
+  if (seed <= 0 || array_size <= 0 || pnum <= 0) {
     printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" \n",
            argv[0]);
     return 1;
@@ -87,9 +81,25 @@ int main(int argc, char **argv) {
   int *array = malloc(sizeof(int) * array_size);
   GenerateArray(array, array_size, seed);
   int active_child_processes = 0;
+  int array_process_step = pnum < array_size ? (array_size / pnum) : 1;
+  // for (int i = 0; i <array_size; i++){
+  //   printf("| %i ", array[i]);
+  // }
+  // printf("\n");
 
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
+  FILE *sync_file;
+  int pipefd[2];
+  if (with_files) {
+    sync_file = fopen("test",  "wb+");
+  }
+  else {
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+  }
 
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
@@ -98,13 +108,19 @@ int main(int argc, char **argv) {
       active_child_processes += 1;
       if (child_pid == 0) {
         // child process
-
         // parallel somehow
-
+        unsigned int begin = array_process_step * (active_child_processes - 1);
+        unsigned int end = begin + array_process_step;
+        begin = begin > array_size ? array_size : begin;
+        end = end > array_size ? array_size : end;
+        if (active_child_processes == pnum) end = array_size;
+        struct MinMax min_max = GetMinMax(array, begin, end);
         if (with_files) {
           // use files here
+          fwrite(&min_max, sizeof(struct MinMax), 1, sync_file);
         } else {
           // use pipe here
+          write(pipefd[1], &min_max, sizeof(struct MinMax));
         }
         return 0;
       }
@@ -114,11 +130,15 @@ int main(int argc, char **argv) {
       return 1;
     }
   }
-
+  int *status;
   while (active_child_processes > 0) {
     // your code here
-
+    wait(status);
     active_child_processes -= 1;
+  }
+  if (with_files) {
+    fclose(sync_file);
+    sync_file = fopen("test",  "rb");
   }
 
   struct MinMax min_max;
@@ -128,12 +148,19 @@ int main(int argc, char **argv) {
   for (int i = 0; i < pnum; i++) {
     int min = INT_MAX;
     int max = INT_MIN;
+    struct MinMax tmpmm;
 
     if (with_files) {
       // read from files
-    } else {
-      // read from pipes
+      fread(&tmpmm, sizeof(struct MinMax), 1, sync_file);
     }
+    else {
+      // read from pipes
+      read(pipefd[0], &tmpmm, sizeof(struct MinMax));
+    }
+    min = tmpmm.min;
+    max = tmpmm.max;
+    // printf("---------------\nmin_max= %i - %i\n",min, max);
 
     if (min < min_max.min) min_max.min = min;
     if (max > min_max.max) min_max.max = max;

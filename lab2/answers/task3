@@ -18,7 +18,8 @@ trap 'smart_exit $? "\"${last_command}\" command filed with exit code $?."' EXIT
 . /home/alexandr/Documents/scripts/nice_echo
 
 lm_echo "task3"
-cd /home/alexandr/GitRepos/os_lab_2019/lab2/src/revert_string
+LAB_PATH=/home/alexandr/GitRepos/os_lab_2019/lab2/src
+cd $LAB_PATH/revert_string
 lb_echo "---PWD: $(pwd)"
 lg_echo "---Create the object files"
 gcc -c ./main.c -o ./bin/main.o

@@ -1,4 +1,32 @@
 #! /bin/bash
 
-cd /home/alexandr/GitRepos/os_lab_2019/lab2/src/revert_string
-gcc main.c revert_string.c -o Revert_string
+function smart_exit() {
+    if [[ $1 -ne 0 ]]; then
+    shift
+    echo $*
+    fi   
+}
+
+# exit when any command fails
+set -e
+# keep track of the last executed command
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+# echo an error message before exiting
+# trap 'echo "\"${last_command}\" command filed with exit code $?."' EXIT
+trap 'smart_exit $? "\"${last_command}\" command filed with exit code $?."' EXIT
+# nice_echo include
+. /home/alexandr/Documents/scripts/nice_echo
+
+lm_echo "task2"
+
+LAB_PATH=/home/alexandr/GitRepos/os_lab_2019/lab2/src
+
+cd $LAB_PATH/revert_string
+lb_echo "---PWD: $(pwd)"
+
+lg_echo "---Compile revert_string"
+gcc main.c revert_string.c -o revert_string
+
+lb_echo "---Run revert_string qwertyu"
+./revert_string qwertyu
+lm_echo "Done"

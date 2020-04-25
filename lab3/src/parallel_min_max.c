@@ -80,13 +80,14 @@ int main(int argc, char **argv) {
 
   int *array = malloc(sizeof(int) * array_size);
   GenerateArray(array, array_size, seed);
+  
   int active_child_processes = 0;
   int array_process_step = pnum < array_size ? (array_size / pnum) : 1;
   // for (int i = 0; i <array_size; i++){
   //   printf("| %i ", array[i]);
   // }
   // printf("\n");
-
+  int **pipes = malloc(sizeof(int*) * pnum);
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
   FILE *sync_file;
@@ -95,13 +96,18 @@ int main(int argc, char **argv) {
     sync_file = fopen("test",  "wb+");
   }
   else {
-    if (pipe(pipefd) == -1) {
-        perror("pipe");
-        exit(EXIT_FAILURE);
+    for (int i = 0; i < pnum; i++){
+      pipes[i] = malloc(sizeof(int) * 2);
+      int* pipe_fd = pipes[i];
+      if (pipe(pipe_fd) == -1) {
+          perror("pipe");
+          exit(EXIT_FAILURE);
+      }
     }
   }
 
   for (int i = 0; i < pnum; i++) {
+    int* pipe_fd = pipes[i];
     pid_t child_pid = fork();
     if (child_pid >= 0) {
       // successful fork
@@ -120,7 +126,9 @@ int main(int argc, char **argv) {
           fwrite(&min_max, sizeof(struct MinMax), 1, sync_file);
         } else {
           // use pipe here
-          write(pipefd[1], &min_max, sizeof(struct MinMax));
+          close(pipe_fd[0]);
+          write(pipe_fd[1], &min_max, sizeof(struct MinMax));
+          close(pipe_fd[1]);
         }
         return 0;
       }
@@ -146,6 +154,7 @@ int main(int argc, char **argv) {
   min_max.max = INT_MIN;
 
   for (int i = 0; i < pnum; i++) {
+    int* pipe_fd = pipes[i];
     int min = INT_MAX;
     int max = INT_MIN;
     struct MinMax tmpmm;
@@ -156,7 +165,9 @@ int main(int argc, char **argv) {
     }
     else {
       // read from pipes
-      read(pipefd[0], &tmpmm, sizeof(struct MinMax));
+      close(pipe_fd[1]);
+      read(pipe_fd[0], &tmpmm, sizeof(struct MinMax));
+      close(pipe_fd[0]);
     }
     min = tmpmm.min;
     max = tmpmm.max;

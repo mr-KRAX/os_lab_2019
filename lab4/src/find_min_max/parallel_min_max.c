@@ -96,8 +96,6 @@ int main(int argc, char **argv) {
   // }
   // printf("\n");
   int **pipes = malloc(sizeof(int*) * pnum);
-  struct timeval start_time;
-  gettimeofday(&start_time, NULL);
   FILE *sync_file;
   int pipefd[2];
   if (with_files) {
@@ -115,6 +113,8 @@ int main(int argc, char **argv) {
   }
   int *pids;
   pids = (int*)malloc(sizeof(int)+pnum);
+  struct timeval start_time;
+  gettimeofday(&start_time, NULL);
   for (int i = 0; i < pnum; i++) {
     int* pipe_fd = pipes[i];
     pid_t child_pid = fork();
@@ -157,14 +157,25 @@ int main(int argc, char **argv) {
       return 1;
     }
   }
-
-  if (kill_timeout > 0){
+  int status[pnum];
+  int res_status;
+  struct timeval curr;
+  if (kill_timeout > 0) {
     for (int i = 0; i < pnum; i++) {
-      waitpid(pids[i], WNOHANG);
-      kill(pids[i], SIGKILL);
-      printf("SIGKILL sent for process pid=%d\n", pids[i]);
+      while (true) {
+        gettimeofday(&curr, NULL);
+        double elapsed_time = (curr.tv_sec - start_time.tv_sec);
+        if (elapsed_time > kill_timeout) {
+          for (int i = 0; i < pnum; i++) {
+            waitpid(pids[i], &status[i], WNOHANG);
+            if (WEXITSTATUS(status[i]) > 1)
+              kill(pids[i], SIGKILL);
+          }
+          break;
+        }
+      }
     }
-  }
+  } 
   else {
     int *status;
     while (active_child_processes > 0) {

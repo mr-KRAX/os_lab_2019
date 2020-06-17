@@ -1,0 +1,59 @@
+#! /bin/bash
+
+function smart_exit() {
+    if [[ $1 -ne 0 ]]; then
+    shift
+    echo $*
+    fi   
+}
+
+# exit when any command fails
+set -e
+# keep track of the last executed command
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+# echo an error message before exiting
+# trap 'echo "\"${last_command}\" command filed with exit code $?."' EXIT
+trap 'smart_exit $? "\"${last_command}\" command filed with exit code $?."' EXIT
+# nice_echo include
+# . /home/alexandr/Documents/scripts/nice_echo
+. $(realpath $(dirname $0)/../../nice_echo)
+
+lm_echo "lab6 run-script"
+# LAB_PATH=/home/alexandr/GitRepos/os_lab_2019/lab6/src
+LAB_PATH=$(realpath $(dirname $0)/../src)
+
+NUM_OF_SERVERS=$1
+NUM_OF_THREADS=$2
+K=$3
+MOD=$4
+ADDRESSES_FILE=$5           
+
+echo ""
+lb_echo "NUM_OF_SERVERS \t $NUM_OF_SERVERS"
+lb_echo "NUM_OF_THREADS \t $NUM_OF_THREADS"
+lb_echo "K \t\t $K"
+lb_echo "MOD \t\t $MOD"
+lb_echo "ADDRESSES_FILE \t $ADDRESSES_FILE"
+echo ""
+
+SERVER_ADDRESS=127.0.0.1
+
+cd $LAB_PATH
+lb_echo "---PWD: $(pwd)"
+lg_echo "---Clear addresses file"
+: > $ADDRESSES_FILE
+lg_echo "---Generate addresses and run servers"
+i=0
+while [[ $i < $1 ]]
+do
+    LD_LIBRARY_PATH=$LAB_PATH ./server --port $[20001 + $i] --tnum $2 &
+    echo $SERVER_ADDRESS:$[ 20001 + $i ] >> $5
+    i=$[ $i + 1 ]
+done
+
+sleep 2
+lg_echo "---Run client"
+LD_LIBRARY_PATH=$LAB_PATH ./client --k $3 --mod $4 --servers $5
+lg_echo "---Killing servers"
+pkill server || :
+lm_echo "Done"

@@ -4,16 +4,18 @@
 
 #include <getopt.h>
 #include <pthread.h>
+#include <semaphore.h>
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+sem_t sem;
 
 struct FArg {
   unsigned long long *res;
   int begin;
   int end;
+  int priority;
 };
 
-#define DEBUG false
+#define DEBUG true
 #define LOG_DEBUG(msg, ...)       \
   do {                            \
     if (DEBUG) {                  \
@@ -34,11 +36,18 @@ void *multTask(void *args) {
   unsigned long long tmp = 1;
   for (int i = beg + 1; i <= end; i++)
     tmp *= i;
-  pthread_mutex_lock(&mutex);
+  int valp = 0;
+  while (true) { 
+    sem_getvalue(&sem, &valp);
+    LOG_DEBUG("priority = %d, Valp = %d", fArgs->priority, valp);
+    if (valp == fArgs->priority) 
+      break;
+    sleep(1);
+  }
   *(fArgs->res) *= tmp;
   LOG_DEBUG("beg = %d; end = %d; tmp = %d;", beg, end, tmp);
   LOG_DEBUG("res = %d", *(fArgs->res));
-  pthread_mutex_unlock(&mutex);
+  sem_wait(&sem);
 }
 
 int main(int argc, char **argv) {
@@ -87,8 +96,10 @@ int main(int argc, char **argv) {
   }
   if (k <= 0 || mod <= 0 || pnum <= 0)
     exit_invalid_syntaxis(argv[0]);
-  unsigned long long ans = 1;
 
+  sem_init(&sem, 0, pnum);
+
+  unsigned long long ans = 1;
   int step = pnum < k ? (k / pnum) : 1;
 
   LOG_DEBUG("k = %d; pnum = %d; mod = %d;", k, pnum, mod);
@@ -101,6 +112,7 @@ int main(int argc, char **argv) {
     fargs[i].begin = begin > k ? k : begin;
     int end = begin + step;
     fargs[i].end = end > k ? k : end;
+    fargs[i].priority = i + 1;
   }
   for (int i = 0; i < pnum; i++) {
     if (pthread_create(&threads[i], NULL, multTask, (void *)(fargs+i))) {

@@ -52,8 +52,8 @@ do
 done
 
 sleep 2
-lg_echo "---Run client"
-LD_LIBRARY_PATH=$LAB_PATH ./client --k $3 --mod $4 --servers $5
-lg_echo "---Killing servers"
-pkill server || :
-lm_echo "Done"
+# lg_echo "---Run client"
+# LD_LIBRARY_PATH=$LAB_PATH ./client --k $3 --mod $4 --servers $5
+# lg_echo "---Killing servers"
+# pkill server || :
+# lm_echo "Done"

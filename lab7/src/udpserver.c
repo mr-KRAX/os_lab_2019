@@ -8,13 +8,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define SERV_PORT 20001
-#define BUFSIZE 1024
 #define SADDR struct sockaddr
 #define SLEN sizeof(struct sockaddr_in)
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (argc < 3) {
+    printf("Too few arguments \n");
+    printf("usage %s port bufsize\n", argv[0]);
+    exit(1);
+  }
   int sockfd, n;
+  int SERV_PORT = atoi(argv[1]);
+  int BUFSIZE = atoi(argv[2]);
+
   char mesg[BUFSIZE], ipadr[16];
   struct sockaddr_in servaddr;
   struct sockaddr_in cliaddr;

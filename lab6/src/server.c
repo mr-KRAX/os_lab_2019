@@ -14,6 +14,8 @@
 #include "multModulo.h"
 #include "pthread.h"
 
+pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+
 struct FactorialArgs {
   uint64_t begin;
   uint64_t end;
@@ -31,6 +33,97 @@ uint64_t Factorial(const struct FactorialArgs *args) {
 void *ThreadFactorial(void *args) {
   struct FactorialArgs *fargs = (struct FactorialArgs *)args;
   return (void *)(uint64_t *)Factorial(fargs);
+}
+
+struct ServerArgs{
+  int server_fd;
+  int tnum;
+  int num;
+
+};
+
+void *ThreadServer(void *args) {
+  struct ServerArgs *svArgs = (struct ServerArgs*) args;
+  int server_fd = svArgs->server_fd;
+  int tnum = svArgs->tnum;
+  int num = svArgs->num;
+  while (true) {
+    struct sockaddr_in client;
+    socklen_t client_len = sizeof(client);
+    pthread_mutex_lock(&mut);
+    int client_fd = accept(server_fd, (struct sockaddr *)&client, &client_len);
+    pthread_mutex_unlock(&mut);
+    if (client_fd < 0) {
+      fprintf(stderr, "Could not establish new connection\n");
+      continue;
+    }
+
+    while (true) {
+      unsigned int buffer_size = sizeof(uint64_t) * 3;
+      char from_client[buffer_size];
+      int read = recv(client_fd, from_client, buffer_size, 0);
+
+      if (!read)
+        break;
+      if (read < 0) {
+        fprintf(stderr, "Client read failed\n");
+        break;
+      }
+      if (read < buffer_size) {
+        fprintf(stderr, "Client send wrong data format\n");
+        break;
+      }
+
+      pthread_t threads[tnum];
+
+      uint64_t begin = 0;
+      uint64_t end = 0;
+      uint64_t mod = 0;
+      memcpy(&begin, from_client, sizeof(uint64_t));
+      memcpy(&end, from_client + sizeof(uint64_t), sizeof(uint64_t));
+      memcpy(&mod, from_client + 2 * sizeof(uint64_t), sizeof(uint64_t));
+
+      fprintf(stdout, "[%u]Receive: %llu %llu %llu\n",num, begin, end, mod);
+      if (tnum > end - begin) tnum = end - begin;
+
+      struct FactorialArgs args[tnum];
+      uint64_t ars = (end - begin)/tnum;
+      uint64_t left = (end - begin)%tnum;
+      for (uint64_t i = 0; i < tnum; i++) 
+      {
+        args[i].begin = begin + ars*i + (left < i ? left : i);
+        args[i].end = begin + ars*(i+1) + (left < i+1 ? left : i+1);
+        args[i].mod = mod;
+
+        if (pthread_create(&threads[i], NULL, ThreadFactorial,
+                           (void *)&args[i])) {
+          printf("Error: pthread_create failed!\n");
+          exit(1);
+        }
+      }
+
+      uint64_t total = 1;
+      for (uint32_t i = 0; i < tnum; i++) {
+        uint64_t result = 0;
+        pthread_join(threads[i], (void **)&result);
+        total = MultModulo(total, result, mod);
+      }
+
+      printf("[%u]Total: %lu\n", num, total);
+
+      char buffer[sizeof(total)];
+      memcpy(buffer, &total, sizeof(total));
+      int err = send(client_fd, buffer, sizeof(total), 0);
+      if (err < 0) {
+        fprintf(stderr, "Can't send data to client\n");
+        break;
+      }
+      sleep(num);
+    }
+
+    shutdown(client_fd, SHUT_RDWR);
+    close(client_fd);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -115,81 +208,28 @@ int main(int argc, char **argv) {
 
   printf("Server on port  %d\n", port);
 
-  while (true) {
-    struct sockaddr_in client;
-    socklen_t client_len = sizeof(client);
-    int client_fd = accept(server_fd, (struct sockaddr *)&client, &client_len);
-
-    if (client_fd < 0) {
-      fprintf(stderr, "Could not establish new connection\n");
-      continue;
-    }
-
-    while (true) {
-      unsigned int buffer_size = sizeof(uint64_t) * 3;
-      char from_client[buffer_size];
-      int read = recv(client_fd, from_client, buffer_size, 0);
-
-      if (!read)
-        break;
-      if (read < 0) {
-        fprintf(stderr, "Client read failed\n");
-        break;
-      }
-      if (read < buffer_size) {
-        fprintf(stderr, "Client send wrong data format\n");
-        break;
-      }
-
-      pthread_t threads[tnum];
-
-      uint64_t begin = 0;
-      uint64_t end = 0;
-      uint64_t mod = 0;
-      memcpy(&begin, from_client, sizeof(uint64_t));
-      memcpy(&end, from_client + sizeof(uint64_t), sizeof(uint64_t));
-      memcpy(&mod, from_client + 2 * sizeof(uint64_t), sizeof(uint64_t));
-
-      fprintf(stdout, "Receive: %llu %llu %llu\n", begin, end, mod);
-      if (tnum > end - begin) tnum = end - begin;
-
-      struct FactorialArgs args[tnum];
-      uint64_t ars = (end - begin)/tnum;
-      uint64_t left = (end - begin)%tnum;
-      for (uint64_t i = 0; i < tnum; i++) 
-      {
-        args[i].begin = begin + ars*i + (left < i ? left : i);
-        args[i].end = begin + ars*(i+1) + (left < i+1 ? left : i+1);
-        args[i].mod = mod;
-
-        if (pthread_create(&threads[i], NULL, ThreadFactorial,
+  pthread_t threads[2];
+  struct ServerArgs args[2];
+  for (int i = 0; i <2 ; i++) {
+    args[i].server_fd = server_fd;
+    args[i].tnum = tnum;
+    args[i].num =i+1;
+    if (pthread_create(&threads[i], NULL, ThreadServer,
                            (void *)&args[i])) {
           printf("Error: pthread_create failed!\n");
           return 1;
         }
-      }
+  }
 
-      uint64_t total = 1;
-      for (uint32_t i = 0; i < tnum; i++) {
+
+  for (uint32_t i = 0; i < tnum; i++) {
         uint64_t result = 0;
         pthread_join(threads[i], (void **)&result);
-        total = MultModulo(total, result, mod);
       }
 
-      printf("Total: %lu\n", total);
 
-      char buffer[sizeof(total)];
-      memcpy(buffer, &total, sizeof(total));
-      err = send(client_fd, buffer, sizeof(total), 0);
-      if (err < 0) {
-        fprintf(stderr, "Can't send data to client\n");
-        break;
-      }
-    }
 
-    shutdown(client_fd, SHUT_RDWR);
-    close(client_fd);
-  }
+  
 
   return 0;
 }
